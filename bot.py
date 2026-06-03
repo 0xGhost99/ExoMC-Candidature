@@ -3,11 +3,16 @@ from discord.ext import commands
 from discord.ui import View, Modal, TextInput, Select, Button
 from datetime import datetime
 import re
+import os
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 # ═══════════════════════════════════════════════════
-#              CONFIGURAZIONE CORE
+#         CONFIGURAZIONE CORE & SICUREZZA
 # ═══════════════════════════════════════════════════
-TOKEN = "MTUwMjUzNDIzNTI3MTk5MTM5Nw.GEdH4w.qPTvFRAMPLMsonFhNoZLmcIiyF5c4-awy8lLVQ"
+# NOTA: È caldamente consigliato usare os.getenv('DISCORD_TOKEN') su Render!
+TOKEN = os.getenv('DISCORD_TOKEN', 'IL_TUO_NUOVO_TOKEN_RIGENERATO')
+
 STAFF_LOGS_CHANNEL_ID = 1502584100060401845
 GUILD_ID              = 1404822847343431732
 STAFF_ROLE_ID         = 1490640384676859954
@@ -17,9 +22,8 @@ intents = discord.Intents.all()
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 # ═══════════════════════════════════════════════════
-#           DATABASE DOMANDE CANDIDATURA
+#      DATABASE DOMANDE CANDIDATURA
 # ═══════════════════════════════════════════════════
-# FASE 1: Informazioni Generali (Max 5 campi per limitazioni Discord)
 RUOLI_INFO = {
     'helper_supporter':  ['Nick in game', 'Nick Discord (@)', 'Età', 'Hai esperienze in questo ambito?', 'Se sì, dove?'],
     'builder':           ['Nick in Game', 'Nick Discord (@)', 'Età', 'Esperienze passate', 'Dove hai avuto esperienze passate?'],
@@ -86,7 +90,7 @@ class ColloquioSelect(Select):
         options = [
             discord.SelectOption(label='Mattina   09:00 – 12:00', value='mattina',    emoji='🌅'),
             discord.SelectOption(label='Pomeriggio 15:00 – 18:00', value='pomeriggio', emoji='☀️'),
-            discord.SelectOption(label='Sera      20:00 – 23:00', value='sera',       emoji='🌙'),
+            discord.SelectOption(label='Sera       20:00 – 23:00', value='sera',       emoji='🌙'),
         ]
         super().__init__(placeholder='📅 Seleziona la tua fascia oraria…', options=options)
 
@@ -202,7 +206,7 @@ class ReviewView(View):
             title='🎙️ Convocazione al Colloquio',
             description=(
                 f'{self.user.mention},\n\n'
-                'Il team di selezione desidera approfondire la tua candidatura\n'
+                'Il team di selection desidera approfondire la tua candidatura\n'
                 'tramite un **colloquio diretto**.\n\n'
                 'Seleziona qui sotto la fascia oraria che preferisci:'
             ),
@@ -273,12 +277,10 @@ class TecnicoModal(Modal):
                 view=TechTwoButtonView(self.ruolo, self.user.id), ephemeral=True
             )
         else:
-            # Per i ruoli corti come Builder e Media finisce direttamente qui
             if logs:
                 await logs.send(content=MENTIONS_LOGS, embed=discord.Embed(title="📊 Candidatura Completa Ricevuta", description=f"Il candidato {self.user.mention} ha terminato l'invio.", color=0x2ECC71), view=ReviewView(self.user, interaction.channel.id))
             await interaction.response.send_message(embed=discord.Embed(title='✅ Candidatura Inviata', description='Tutte le tue risposte sono state inoltrate allo staff.', color=0x2ECC71))
 
-# PARTE 2 DEI MODALI LUNGHI
 class TecnicoDueModal(Modal):
     def __init__(self, ruolo: str, user: discord.User):
         super().__init__(title=f'Test Tecnico Parte 2 — {ruolo.upper()}'[:45])
@@ -310,7 +312,6 @@ class TecnicoDueModal(Modal):
             await logs.send(content=MENTIONS_LOGS, embed=discord.Embed(title="📊 Candidatura Completa", description=f"Candidatura conclusa con successo per {self.user.mention}.", color=0x2ECC71), view=ReviewView(self.user, interaction.channel.id))
 
         await interaction.response.send_message(embed=discord.Embed(title='✅ Questionario Concluso', description='I tuoi dati sono ora completi. Attendi una risposta dallo Staff!', color=0x2ECC71))
-
 
 class ApplicationModal(Modal):
     def __init__(self, user: discord.User, ruolo: str):
@@ -387,7 +388,7 @@ class ReplyPanel(View):
         await interaction.response.send_message(embed=embed)
 
 # ════════════════════════════════════════════════════════
-#   INTERCETTAZIONE PULSANTI DINAMICI
+#   INTERCETTAZIONE PULSANTI DINAMICI (OTTIMIZZATA)
 # ════════════════════════════════════════════════════════
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
@@ -464,7 +465,7 @@ async def urgenza(ctx):
 async def add_staff(ctx, membro_raw: str):
     if not is_staff(ctx.author): return
     membro = await find_user(ctx, membro_raw)
-    if miembro:
+    if membro:
         await ctx.channel.set_permissions(membro, read_messages=True, send_messages=True, view_channel=True)
         await ctx.send(embed=discord.Embed(title='✅ Membro Aggiunto', description=f'{membro.mention} aggiunto.', color=0x2ECC71))
 
@@ -501,5 +502,26 @@ async def help_exo(ctx):
 async def on_ready():
     await bot.change_presence(status=discord.Status.online, activity=discord.Activity(type=discord.ActivityType.watching, name='ExoMC • !apply'))
     print(f'[✓] ExoMC Bot online.')
+
+
+# ════════════════════════════════════════════════════════
+#    FAKE WEB SERVER PER RENDER (H24 ONLINE)
+# ════════════════════════════════════════════════════════
+class MyServer(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/html")
+        self.end_headers()
+        self.wfile.write(b"ExoMC Bot Online!")
+
+    def log_message(self, format, *args):
+        return  # Silenzia i log HTTP continui per fare pulizia nella console
+
+def run_web_server():
+    server = HTTPServer(('0.0.0.0', 10000), MyServer)
+    server.serve_forever()
+
+# Avvia il server in un thread separato
+threading.Thread(target=run_web_server, daemon=True).start()
 
 bot.run(TOKEN)
