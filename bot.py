@@ -10,8 +10,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 # ═══════════════════════════════════════════════════
 #         CONFIGURAZIONE CORE & SICUREZZA
 # ═══════════════════════════════════════════════════
-# NOTA: È caldamente consigliato usare os.getenv('DISCORD_TOKEN') su Render!
-TOKEN = os.getenv('DISCORD_TOKEN', 'IL_TUO_NUOVO_TOKEN_RIGENERATO')
+# PRELIEVO TOKEN SICURO DA AMBIENTE RENDER
+TOKEN = os.getenv('DISCORD_TOKEN', 'INSERISCI_QUI_IL_TUO_TOKEN_SE_NON_USI_LE_VARIABILI_DI_AMBIENTE')
 
 STAFF_LOGS_CHANNEL_ID = 1502584100060401845
 GUILD_ID              = 1404822847343431732
@@ -128,7 +128,7 @@ class ColloquioView(View):
         self.add_item(ColloquioSelect())
 
 # ════════════════════════════════════════════════════════
-#   3. PULSANTE "APRI QUESTIONARIO TECNICO"
+#   3. PULSANTI AGGIUNTIVI PER QUESTIONARI TECNICI
 # ════════════════════════════════════════════════════════
 class TechButton(Button):
     def __init__(self, ruolo: str, user_id: int):
@@ -207,7 +207,7 @@ class ReviewView(View):
             description=(
                 f'{self.user.mention},\n\n'
                 'Il team di selection desidera approfondire la tua candidatura\n'
-                'tramite un **colloquio diretto**.\n\n'
+                'tramite un **colloquio directo**.\n\n'
                 'Seleziona qui sotto la fascia oraria che preferisci:'
             ),
             color=0x5865F2,
@@ -219,7 +219,7 @@ class ReviewView(View):
         await interaction.response.send_message('🎤 Colloquio avviato nel ticket.', ephemeral=True)
 
 # ════════════════════════════════════════════════════════
-#   5. MODALI DOMANDE AGGIORNATE
+#   5. MODALI QUESTIONARI TECNICI (PARTE 1 & 2)
 # ════════════════════════════════════════════════════════
 class TecnicoModal(Modal):
     def __init__(self, ruolo: str, user: discord.User):
@@ -346,7 +346,7 @@ class ApplicationModal(Modal):
         await interaction.response.send_message(embed=next_embed, view=TechButtonView(self.ruolo, self.user.id), ephemeral=True)
 
 # ════════════════════════════════════════════════════════
-#   6. VIEW PER STAFF — avvia candidatura manuale
+#   6. VIEW PER INVITO STAFF MANUALE
 # ════════════════════════════════════════════════════════
 class ApplyView(View):
     def __init__(self, user: discord.User, ruolo: str):
@@ -361,7 +361,7 @@ class ApplyView(View):
         await interaction.response.send_modal(ApplicationModal(interaction.user, self.ruolo))
 
 # ════════════════════════════════════════════════════════
-#   7. PANNELLO RISPOSTE RAPIDE
+#   7. PANNELLO RISPOSTE RAPIDE TICKET
 # ════════════════════════════════════════════════════════
 class ReplyPanel(View):
     def __init__(self):
@@ -388,7 +388,7 @@ class ReplyPanel(View):
         await interaction.response.send_message(embed=embed)
 
 # ════════════════════════════════════════════════════════
-#   INTERCETTAZIONE PULSANTI DINAMICI (OTTIMIZZATA)
+#   INTERCETTAZIONE PULSANTI DINAMICI DEGLI UTENTI
 # ════════════════════════════════════════════════════════
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
@@ -414,7 +414,7 @@ async def on_interaction(interaction: discord.Interaction):
             await interaction.response.send_modal(TecnicoDueModal(ruolo, interaction.user))
 
 # ════════════════════════════════════════════════════════
-#   COMANDI
+#   COMANDI DEL BOT
 # ════════════════════════════════════════════════════════
 @bot.command()
 async def candidatura(ctx, utente_raw: str, ruolo: str):
@@ -505,7 +505,7 @@ async def on_ready():
 
 
 # ════════════════════════════════════════════════════════
-#    FAKE WEB SERVER PER RENDER (H24 ONLINE)
+#    FAKE WEB SERVER AVANZATO PER RENDER & UPTIMEROBOT
 # ════════════════════════════════════════════════════════
 class MyServer(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -514,14 +514,22 @@ class MyServer(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b"ExoMC Bot Online!")
 
+    # Gestisce i ping di tipo HEAD inviati dal piano free di UptimeRobot
+    def do_HEAD(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/html")
+        self.end_headers()
+
     def log_message(self, format, *args):
-        return  # Silenzia i log HTTP continui per fare pulizia nella console
+        return  # Nasconde i log dei ping continui mantenendo pulita la console di Render
 
 def run_web_server():
-    server = HTTPServer(('0.0.0.0', 10000), MyServer)
+    # Prende dinamicamente la porta assegnata da Render, o usa la 10000 di default
+    port = int(os.getenv("PORT", 10000))
+    server = HTTPServer(('0.0.0.0', port), MyServer)
     server.serve_forever()
 
-# Avvia il server in un thread separato
+# Avvio del server web finto in un Thread parallelo
 threading.Thread(target=run_web_server, daemon=True).start()
 
 bot.run(TOKEN)
